@@ -66,9 +66,12 @@ func main() {
 	<-signal
 
 	time.Sleep(1 * time.Second)
-	fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "已启动，停止其他项目...")
 
-	stopRunning(runningProjects)
+	if len(runningProjects) > 0 {
+		fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "已启动，停止其他项目...")
+
+		stopRunning(runningProjects)
+	}
 }
 
 func initProjects(deployments []Deployment, projects, runningProjects, stoppedProjects *[]Deployment) {
