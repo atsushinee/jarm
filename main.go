@@ -25,41 +25,106 @@ var client = &http.Client{
 func main() {
 	deployments := list()
 	var projects []Deployment
-	var stoppedProjects []Deployment
 	var runningProjects []Deployment
+	var stoppedProjects []Deployment
+	initProjects(deployments, &projects, &runningProjects, &stoppedProjects)
 
+	if projects == nil {
+		log.Fatal("project not found.")
+		return
+	}
+
+	var deployment Deployment
+
+	if len(projects) == 1 {
+		deployment = projects[0]
+
+		if len(runningProjects) == 1 {
+			if config.ForceStop {
+				fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "正在运行，停止中...")
+				stop(deployment.ProjectID)
+			} else {
+				fmt.Println("project is running.")
+				return
+			}
+		}
+	} else {
+		printStoppedProjects(stoppedProjects)
+		printRunningProjects(runningProjects)
+
+		if stoppedProjects == nil {
+			log.Fatal("no stopped projects.")
+			return
+		}
+		deployment = stoppedProjects[0]
+	}
+
+	startDeployment(deployment)
+
+	signal := make(chan struct{})
+	waitRealStart(deployment, signal)
+	<-signal
+
+	time.Sleep(1 * time.Second)
+	fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "已启动，停止其他项目...")
+
+	stopRunning(runningProjects)
+}
+
+func initProjects(deployments []Deployment, projects, runningProjects, stoppedProjects *[]Deployment) {
 	for _, deployment := range deployments {
 		for _, projectId := range config.ProjectIdList {
 			if deployment.ProjectID == projectId {
-				projects = append(projects, deployment)
+				*projects = append(*projects, deployment)
 				if deployment.ProjectStatus == "运行中" {
-					runningProjects = append(runningProjects, deployment)
+					*runningProjects = append(*runningProjects, deployment)
 				} else {
-					stoppedProjects = append(stoppedProjects, deployment)
+					*stoppedProjects = append(*stoppedProjects, deployment)
 				}
 			}
 		}
 	}
 
-	if projects == nil {
-		log.Fatal("project not found")
-		return
-	}
+}
 
-	if stoppedProjects == nil {
-		log.Fatal("no stopped projects")
-		return
-	}
-
-	for _, project := range stoppedProjects {
+func printStoppedProjects(projects []Deployment) {
+	for _, project := range projects {
 		fmt.Println("未启动项目:", project.ProjectName, project.ServiceName, project.DepolyPort)
 	}
+}
 
-	for _, project := range runningProjects {
+func printRunningProjects(projects []Deployment) {
+	for _, project := range projects {
 		fmt.Println("运行中项目:", project.ProjectName, project.ServiceName, project.DepolyPort)
 	}
+}
 
-	deployment := stoppedProjects[0]
+func stopRunning(runningProjects []Deployment) {
+	for _, project := range runningProjects {
+		time.Sleep(1 * time.Second)
+		stop(project.ProjectID)
+		fmt.Println(project.ProjectName, project.ServiceName, project.DepolyPort, "已停止")
+	}
+}
+
+func waitRealStart(deployment Deployment, signal chan struct{}) {
+	go func() {
+		realStart := false
+		for !realStart {
+			err := test("http://" + config.Host + ":" + deployment.DepolyPort)
+			if err != nil {
+				fmt.Printf("\r等待启动完成...")
+				time.Sleep(5 * time.Second)
+			} else {
+				realStart = true
+			}
+		}
+		fmt.Println()
+		signal <- struct{}{}
+	}()
+}
+
+func startDeployment(deployment Deployment) {
 	fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort)
 	fmt.Println("卸载...")
 	uninstall(deployment.ProjectID)
@@ -75,27 +140,6 @@ func main() {
 	fmt.Println("启动...")
 	start(deployment.ProjectID)
 	fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "正在启动...")
-
-	realStart := false
-	for !realStart {
-		err := test("http://" + config.Host + ":" + deployment.DepolyPort)
-		if err != nil {
-			fmt.Printf("\r等待启动完成...")
-			time.Sleep(5 * time.Second)
-		} else {
-			realStart = true
-		}
-	}
-
-	fmt.Println()
-	time.Sleep(1 * time.Second)
-	fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "已启动，停止其他项目...")
-	start(deployment.ProjectID)
-	for _, project := range runningProjects {
-		time.Sleep(1 * time.Second)
-		stop(project.ProjectID)
-		fmt.Println(project.ProjectName, project.ServiceName, project.DepolyPort, "已停止")
-	}
 }
 
 func debug(v ...any) {

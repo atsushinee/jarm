@@ -15,6 +15,7 @@ type Config struct {
 	ProjectIdList []string
 	BaseUrl       string
 	Debug         bool
+	ForceStop     bool
 }
 
 var config = Config{}
@@ -38,6 +39,7 @@ func init() {
 	config.JarPath = viper.GetString("client.JarPath")
 	config.ProjectIdList = strings.Split(viper.GetString("client.ProjectId"), ",")
 	config.Debug = viper.GetBool("client.Debug")
+	config.ForceStop = viper.GetBool("client.ForceStop")
 
 	config.BaseUrl = "http://" + config.Host + ":" + config.Port + "/api"
 	log.Printf("%#v\n", config)
