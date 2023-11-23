@@ -43,33 +43,35 @@ func main() {
 			if config.ForceStop {
 				fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "正在运行，停止中...")
 				stop(deployment.ProjectID)
+
+				runningProjects = nil
+				stoppedProjects = append(stoppedProjects, deployment)
 			} else {
 				fmt.Println("project is running.")
 				return
 			}
 		}
-	} else {
-		printStoppedProjects(stoppedProjects)
-		printRunningProjects(runningProjects)
-
-		if stoppedProjects == nil {
-			log.Fatal("no stopped projects.")
-			return
-		}
-		deployment = stoppedProjects[0]
 	}
+
+	printStoppedProjects(stoppedProjects)
+	printRunningProjects(runningProjects)
+
+	if stoppedProjects == nil {
+		log.Fatal("no stopped projects.")
+		return
+	}
+	deployment = stoppedProjects[0]
 
 	startDeployment(deployment)
 
 	signal := make(chan struct{})
 	waitRealStart(deployment, signal)
 	<-signal
+	fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "已启动")
 
 	time.Sleep(1 * time.Second)
-
 	if len(runningProjects) > 0 {
-		fmt.Println(deployment.ProjectName, deployment.ServiceName, deployment.DepolyPort, "已启动，停止其他项目...")
-
+		fmt.Println("停止其他项目...")
 		stopRunning(runningProjects)
 	}
 }
